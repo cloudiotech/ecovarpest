@@ -32,7 +32,7 @@ async function uploadToShopify(filePath) {
         files {
           id
           preview {
-            image { originalSrc } # ✅ Correct field for file URL
+            image { originalSrc }  # ✅ Correct field for file URL
           }
         }
         userErrors {
@@ -53,25 +53,34 @@ async function uploadToShopify(filePath) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',  // ✅ FIX for Unsupported Accept header error
+            'Accept': 'application/json',  // ✅ Fix for Unsupported Accept header error
             'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN
         },
         body: JSON.stringify({ query, variables })
     });
 
     const jsonResponse = await response.json();
-    console.log("Shopify API Response:", JSON.stringify(jsonResponse, null, 2)); // ✅ Debugging Log
+    
+    // ✅ Print entire API response for debugging
+    console.log("🔹 Shopify API Response:", JSON.stringify(jsonResponse, null, 2)); 
 
     if (!jsonResponse.data || !jsonResponse.data.fileCreate) {
-        throw new Error(`Unexpected API Response: ${JSON.stringify(jsonResponse)}`);
+        throw new Error(`🚨 Unexpected API Response: ${JSON.stringify(jsonResponse)}`);
     }
 
     if (jsonResponse.data.fileCreate.userErrors.length > 0) {
+        console.error("❌ Shopify API Error:", jsonResponse.data.fileCreate.userErrors);
         throw new Error(jsonResponse.data.fileCreate.userErrors[0].message);
     }
 
-    return jsonResponse.data.fileCreate.files[0].preview.image.originalSrc; // ✅ FIXED: Correct file URL
+    const fileUrl = jsonResponse.data.fileCreate.files[0].preview.image.originalSrc;
+    
+    // ✅ Log the uploaded file URL
+    console.log("✅ Uploaded File URL:", fileUrl);  
+
+    return fileUrl; // ✅ Return the file URL
 }
+
 
 // ✅ Function to Save Metafield in Order
 async function saveMetafield(orderId, fileId) {
