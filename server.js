@@ -6,12 +6,12 @@ const fetch = require('node-fetch');
 require('dotenv').config();
 
 const app = express();
-app.use(express.json()); 
-app.use(cors()); 
+app.use(express.json());
+app.use(cors());
 
-// ✅ Multer setup for file uploads
+// ✅ Configure Multer for file uploads
 const storage = multer.diskStorage({
-    destination: 'uploads/', 
+    destination: 'uploads/',
     filename: (req, file, cb) => {
         cb(null, file.originalname);
     }
@@ -20,9 +20,8 @@ const upload = multer({ storage });
 
 const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
 const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
-const SHOPIFY_API_VERSION = "2024-01"; // ✅ Ensure consistent API version
 
-// ✅ Upload File to Shopify Files API
+// ✅ Function to Upload File to Shopify Files API (returns File ID)
 async function uploadToShopify(filePath) {
     const fileBuffer = fs.readFileSync(filePath);
     const fileBase64 = fileBuffer.toString('base64');
@@ -31,7 +30,7 @@ async function uploadToShopify(filePath) {
     mutation fileCreate($files: [FileCreateInput!]!) {
       fileCreate(files: $files) {
         files {
-          id  # ✅ Get the file ID
+          id  # ✅ Get File ID (not URL)
         }
         userErrors {
           field
@@ -47,11 +46,11 @@ async function uploadToShopify(filePath) {
         }]
     };
 
-    const response = await fetch(`https://${process.env.SHOPIFY_STORE}/admin/api/2024-01/graphql.json`, {
+    const response = await fetch(`https://${SHOPIFY_STORE}/admin/api/2024-01/graphql.json`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN
+            'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN
         },
         body: JSON.stringify({ query, variables })
     });
@@ -67,88 +66,54 @@ async function uploadToShopify(filePath) {
         throw new Error(jsonResponse.data.fileCreate.userErrors[0].message);
     }
 
-    const fileId = jsonResponse.data.fileCreate.files[0].id;
-    return fileId; // ✅ Return the file ID
+    return jsonResponse.data.fileCreate.files[0].id; // ✅ Return File ID
 }
 
-
-// ✅ Save Metafield in Order
-async function saveMetafield(orderId, fileUrl) {
+// ✅ Function to Retrieve File URL from Shopify
+async function getFileUrl(fileId) {
     const query = `
-    mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
-      metafieldsSet(metafields: $metafields) {
-        metafields {
-          id
-          value
-        }
-        userErrors {
-          field
-          message
+    query {
+      file(id: "${fileId}") {
+        ... on GenericFile {
+          url  # ✅ Fetch File URL separately
         }
       }
     }`;
 
-    const variables = {
-        metafields: [{
-            ownerId: `gid://shopify/Order/${orderId}`,
-            namespace: "custom",
-            key: "lpo_file",
-            type: "url",
-            value: fileUrl
-        }]
-    };
-
-    const response = await fetch(`https://${SHOPIFY_STORE}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+    const response = await fetch(`https://${SHOPIFY_STORE}/admin/api/2024-01/graphql.json`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN
         },
-        body: JSON.stringify({ query, variables })
+        body: JSON.stringify({ query })
     });
 
     const jsonResponse = await response.json();
-    console.log("Metafield API Response:", JSON.stringify(jsonResponse, null, 2)); // ✅ Debugging Log
+    console.log("File URL Response:", JSON.stringify(jsonResponse, null, 2)); // Debugging Log
 
-    if (!jsonResponse.data || !jsonResponse.data.metafieldsSet) {
-        throw new Error(`Unexpected API Response: ${JSON.stringify(jsonResponse)}`);
+    if (!jsonResponse.data || !jsonResponse.data.file) {
+        throw new Error(`Could not retrieve file URL: ${JSON.stringify(jsonResponse)}`);
     }
 
-    if (jsonResponse.data.metafieldsSet.userErrors.length > 0) {
-        throw new Error(jsonResponse.data.metafieldsSet.userErrors[0].message);
-    }
+    return jsonResponse.data.file.url;
 }
 
-// ✅ File Upload Route
+// ✅ Upload Route - Handles File Upload & Fetches URL
 app.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, error: 'No file uploaded.' });
     }
     try {
-        const fileUrl = await uploadToShopify(req.file.path);
+        const fileId = await uploadToShopify(req.file.path);
+        const fileUrl = await getFileUrl(fileId); // ✅ Fetch File URL
         res.json({ success: true, fileUrl });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// ✅ Save Metafield Route
-app.post('/save-metafield', async (req, res) => {
-    const { orderId, fileUrl } = req.body;
-    
-    if (!orderId || !fileUrl) {
-        return res.status(400).json({ success: false, error: 'Missing orderId or fileUrl.' });
-    }
-
-    try {
-        await saveMetafield(orderId, fileUrl);
-        res.json({ success: true, message: "Metafield saved successfully!" });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// ✅ Test Route
+// ✅ Test Route - Check if Server is Running
 app.get('/test', (req, res) => {
     res.json({ success: true, message: 'Server is working!' });
 });
