@@ -31,8 +31,7 @@ async function uploadToShopify(filePath) {
     mutation fileCreate($files: [FileCreateInput!]!) {
       fileCreate(files: $files) {
         files {
-          id  # ✅ Correct field
-          alt
+          id  # ✅ Get the file ID
         }
         userErrors {
           field
@@ -68,7 +67,8 @@ async function uploadToShopify(filePath) {
         throw new Error(jsonResponse.data.fileCreate.userErrors[0].message);
     }
 
-    return jsonResponse.data.fileCreate.files[0].id; // ✅ Return file ID instead of URL
+    const fileId = jsonResponse.data.fileCreate.files[0].id;
+    return fileId; // ✅ Return the file ID
 }
 
 
