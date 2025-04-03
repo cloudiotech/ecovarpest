@@ -31,8 +31,7 @@ async function uploadToShopify(filePath) {
     mutation fileCreate($files: [FileCreateInput!]!) {
       fileCreate(files: $files) {
         files {
-          id
-          url  # ✅ Use 'url' instead of 'previewUrl'
+          id  # ✅ Correct field
           alt
         }
         userErrors {
@@ -49,17 +48,17 @@ async function uploadToShopify(filePath) {
         }]
     };
 
-    const response = await fetch(`https://${SHOPIFY_STORE}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+    const response = await fetch(`https://${process.env.SHOPIFY_STORE}/admin/api/2024-01/graphql.json`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN
+            'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN
         },
         body: JSON.stringify({ query, variables })
     });
 
     const jsonResponse = await response.json();
-    console.log("Shopify API Response:", JSON.stringify(jsonResponse, null, 2)); // ✅ Debugging Log
+    console.log("Shopify API Response:", JSON.stringify(jsonResponse, null, 2)); // Debugging Log
 
     if (!jsonResponse.data || !jsonResponse.data.fileCreate) {
         throw new Error(`Unexpected API Response: ${JSON.stringify(jsonResponse)}`);
@@ -69,8 +68,9 @@ async function uploadToShopify(filePath) {
         throw new Error(jsonResponse.data.fileCreate.userErrors[0].message);
     }
 
-    return jsonResponse.data.fileCreate.files[0].url; // ✅ Return 'url' instead of 'previewUrl'
+    return jsonResponse.data.fileCreate.files[0].id; // ✅ Return file ID instead of URL
 }
+
 
 // ✅ Save Metafield in Order
 async function saveMetafield(orderId, fileUrl) {
