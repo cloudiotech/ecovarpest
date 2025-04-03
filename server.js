@@ -58,7 +58,8 @@ async function uploadToShopify(filePath) {
     });
 
     const jsonResponse = await response.json();
-    console.log("Shopify API Response:", JSON.stringify(jsonResponse, null, 2)); // Debugging Log
+   console.log("Full Shopify API Response:", response.status, response.statusText, JSON.stringify(jsonResponse, null, 2));
+// Debugging Log
 
     if (!jsonResponse.data || !jsonResponse.data.fileCreate) {
         throw new Error(`Unexpected API Response: ${JSON.stringify(jsonResponse)}`);
