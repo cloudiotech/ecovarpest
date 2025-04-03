@@ -6,14 +6,14 @@ const fetch = require('node-fetch');
 require('dotenv').config();
 
 const app = express();
-app.use(express.json()); // Ensure JSON body parsing
-app.use(cors()); // Enable CORS
+app.use(express.json());
+app.use(cors());
 
 // ✅ Configure Multer to store files in 'uploads' directory
 const storage = multer.diskStorage({
-    destination: 'uploads/', 
+    destination: 'uploads/',
     filename: (req, file, cb) => {
-        cb(null, file.originalname); // Keep original file name
+        cb(null, file.originalname);
     }
 });
 const upload = multer({ storage });
@@ -32,7 +32,7 @@ async function uploadToShopify(filePath) {
         files {
           id
           preview {
-            image { originalSrc }  # ✅ Correct field for file URL
+            image { originalSrc }  # ✅ Get File URL
           }
         }
         userErrors {
@@ -49,20 +49,18 @@ async function uploadToShopify(filePath) {
         }]
     };
 
-    const response = await fetch(`https://${process.env.SHOPIFY_STORE}/admin/api/2024-01/graphql.json`, {
+    const response = await fetch(`https://${SHOPIFY_STORE}/admin/api/2024-01/graphql.json`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',  // ✅ Fix for Unsupported Accept header error
-            'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN
+            'Accept': 'application/json',
+            'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN
         },
         body: JSON.stringify({ query, variables })
     });
 
     const jsonResponse = await response.json();
-    
-    // ✅ Print entire API response for debugging
-    console.log("🔹 Shopify API Response:", JSON.stringify(jsonResponse, null, 2)); 
+    console.log("🔹 Shopify API Response:", JSON.stringify(jsonResponse, null, 2));
 
     if (!jsonResponse.data || !jsonResponse.data.fileCreate) {
         throw new Error(`🚨 Unexpected API Response: ${JSON.stringify(jsonResponse)}`);
@@ -74,16 +72,13 @@ async function uploadToShopify(filePath) {
     }
 
     const fileUrl = jsonResponse.data.fileCreate.files[0].preview.image.originalSrc;
-    
-    // ✅ Log the uploaded file URL
-    console.log("✅ Uploaded File URL:", fileUrl);  
+    console.log("✅ Uploaded File URL:", fileUrl);
 
-    return fileUrl; // ✅ Return the file URL
+    return fileUrl;
 }
 
-
-// ✅ Function to Save Metafield in Order
-async function saveMetafield(orderId, fileId) {
+// ✅ Function to Save Metafield in Order & Customer
+async function saveMetafield(ownerType, ownerId, fileUrl) {
     const query = `
     mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
       metafieldsSet(metafields: $metafields) {
@@ -100,11 +95,11 @@ async function saveMetafield(orderId, fileId) {
 
     const variables = {
         metafields: [{
-            ownerId: `gid://shopify/Order/${orderId}`,
+            ownerId: `gid://shopify/${ownerType}/${ownerId}`,
             namespace: "custom",
             key: "lpo_file",
             type: "single_line_text_field",
-            value: fileId // ✅ Save the file ID instead of a URL
+            value: fileUrl
         }]
     };
 
@@ -112,33 +107,61 @@ async function saveMetafield(orderId, fileId) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json', // ✅ Ensure this header is present
+            'Accept': 'application/json',
             'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN
         },
         body: JSON.stringify({ query, variables })
     });
 
     const jsonResponse = await response.json();
-    
+    console.log(`✅ Metafield Saved for ${ownerType}:`, jsonResponse);
+
     if (jsonResponse.data.metafieldsSet.userErrors.length > 0) {
         throw new Error(jsonResponse.data.metafieldsSet.userErrors[0].message);
     }
 }
 
-// ✅ Upload Route - FIXED
+// ✅ Upload Route - Uploads File & Returns File URL
 app.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, error: 'No file uploaded.' });
     }
     try {
-        const fileId = await uploadToShopify(req.file.path);
-        res.json({ success: true, fileId });
+        const fileUrl = await uploadToShopify(req.file.path);
+        res.json({ success: true, fileUrl });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// ✅ Test Route - To Check Server Status
+// ✅ Webhook Listener for Order Creation
+app.post("/webhook/orders/create", async (req, res) => {
+    try {
+        const order = req.body;
+        const customerId = order.customer?.id;
+        const orderId = order.id;
+        const lpoFile = order.note_attributes.find(attr => attr.name === "lpo_file")?.value;
+
+        console.log("📦 New Order Received:", orderId, "👤 Customer ID:", customerId, "📁 LPO File:", lpoFile);
+
+        if (lpoFile) {
+            // Save LPO File as Order Metafield
+            await saveMetafield("Order", orderId, lpoFile);
+
+            // Save LPO File as Customer Metafield (if customer exists)
+            if (customerId) {
+                await saveMetafield("Customer", customerId, lpoFile);
+            }
+        }
+
+        res.status(200).send("✅ LPO Metafields Updated Successfully");
+    } catch (error) {
+        console.error("❌ Error Updating Metafields:", error);
+        res.status(500).send("Failed to update metafields");
+    }
+});
+
+// ✅ Test Route - Check Server Status
 app.get('/test', (req, res) => {
     res.json({ success: true, message: 'Server is working!' });
 });
@@ -146,5 +169,5 @@ app.get('/test', (req, res) => {
 // ✅ Start the Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
