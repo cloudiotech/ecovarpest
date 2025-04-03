@@ -3,13 +3,18 @@ const multer = require('multer');
 const fs = require('fs');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ✅ Configure Multer to store files in 'uploads' directory
+const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
+const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
+const SHOPIFY_WEBHOOK_SECRET = process.env.SHOPIFY_WEBHOOK_SECRET;
+
+// ✅ Configure Multer for File Uploads
 const storage = multer.diskStorage({
     destination: 'uploads/',
     filename: (req, file, cb) => {
@@ -18,10 +23,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
-const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
-
-// ✅ Function to Upload File to Shopify Files API
+/** 🔹 Upload File to Shopify Files API */
 async function uploadToShopify(filePath) {
     const fileBuffer = fs.readFileSync(filePath);
     const fileBase64 = fileBuffer.toString('base64');
@@ -32,7 +34,7 @@ async function uploadToShopify(filePath) {
         files {
           id
           preview {
-            image { originalSrc }  # ✅ Get File URL
+            image { originalSrc }
           }
         }
         userErrors {
@@ -62,22 +64,14 @@ async function uploadToShopify(filePath) {
     const jsonResponse = await response.json();
     console.log("🔹 Shopify API Response:", JSON.stringify(jsonResponse, null, 2));
 
-    if (!jsonResponse.data || !jsonResponse.data.fileCreate) {
-        throw new Error(`🚨 Unexpected API Response: ${JSON.stringify(jsonResponse)}`);
-    }
-
     if (jsonResponse.data.fileCreate.userErrors.length > 0) {
-        console.error("❌ Shopify API Error:", jsonResponse.data.fileCreate.userErrors);
         throw new Error(jsonResponse.data.fileCreate.userErrors[0].message);
     }
 
-    const fileUrl = jsonResponse.data.fileCreate.files[0].preview.image.originalSrc;
-    console.log("✅ Uploaded File URL:", fileUrl);
-
-    return fileUrl;
+    return jsonResponse.data.fileCreate.files[0].preview.image.originalSrc;
 }
 
-// ✅ Function to Save Metafield in Order & Customer
+/** 🔹 Save Metafield in Shopify (Order / Customer) */
 async function saveMetafield(ownerType, ownerId, fileUrl) {
     const query = `
     mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
@@ -121,7 +115,7 @@ async function saveMetafield(ownerType, ownerId, fileUrl) {
     }
 }
 
-// ✅ Upload Route - Uploads File & Returns File URL
+/** 🔹 Upload Route */
 app.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, error: 'No file uploaded.' });
@@ -134,8 +128,23 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-// ✅ Webhook Listener for Order Creation
-app.post("/webhook/orders/create", async (req, res) => {
+/** 🔹 Verify Shopify Webhook Signature */
+function verifyShopifyWebhook(req, res, next) {
+    const hmac = req.headers['x-shopify-hmac-sha256']; 
+    const body = JSON.stringify(req.body);
+    const hash = crypto.createHmac('sha256', SHOPIFY_WEBHOOK_SECRET)
+                      .update(body, 'utf8')
+                      .digest('base64');
+
+    if (hash !== hmac) {
+        console.error("🚨 Webhook verification failed!");
+        return res.status(401).send("Unauthorized");
+    }
+    next();
+}
+
+/** 🔹 Webhook Listener for Order Creation */
+app.post("/webhook/orders/create", express.json(), verifyShopifyWebhook, async (req, res) => {
     try {
         const order = req.body;
         const customerId = order.customer?.id;
@@ -145,10 +154,7 @@ app.post("/webhook/orders/create", async (req, res) => {
         console.log("📦 New Order Received:", orderId, "👤 Customer ID:", customerId, "📁 LPO File:", lpoFile);
 
         if (lpoFile) {
-            // Save LPO File as Order Metafield
             await saveMetafield("Order", orderId, lpoFile);
-
-            // Save LPO File as Customer Metafield (if customer exists)
             if (customerId) {
                 await saveMetafield("Customer", customerId, lpoFile);
             }
@@ -161,63 +167,12 @@ app.post("/webhook/orders/create", async (req, res) => {
     }
 });
 
-// ✅ Test Route - Check Server Status
+/** 🔹 Test Route */
 app.get('/test', (req, res) => {
     res.json({ success: true, message: 'Server is working!' });
 });
 
-
-const crypto = require('crypto'); // Required for HMAC verification
-
-// ✅ Middleware to verify Shopify Webhook
-function verifyShopifyWebhook(req, res, next) {
-    const hmac = req.headers['x-shopify-hmac-sha256']; // Get HMAC from Shopify headers
-    const body = JSON.stringify(req.body);
-    const hash = crypto.createHmac('sha256', process.env.SHOPIFY_WEBHOOK_SECRET)
-                      .update(body, 'utf8')
-                      .digest('base64');
-
-    if (hash !== hmac) {
-        console.error("🚨 Webhook verification failed!");
-        return res.status(401).send("Unauthorized");
-    }
-    next();
-}
-
-// ✅ Webhook Route for Order Creation
-app.post('/webhook/orders/create', express.json({ type: 'application/json' }), verifyShopifyWebhook, async (req, res) => {
-    try {
-        const orderData = req.body;
-        const orderId = orderData.id; // Shopify Order ID
-        console.log("✅ New Order Received:", orderId);
-
-        // Extract LPO File Metafield from Customer Data (if available)
-        let lpoFileId = null;
-        if (orderData.customer && orderData.customer.metafields) {
-            const metafield = orderData.customer.metafields.find(mf => mf.namespace === "custom" && mf.key === "lpo_file");
-            if (metafield) {
-                lpoFileId = metafield.value;
-                console.log("📂 LPO File ID:", lpoFileId);
-            }
-        }
-
-        // ✅ Save LPO File ID to Order Metafields
-        if (lpoFileId) {
-            await saveMetafield(orderId, lpoFileId);
-            console.log(`✅ LPO File (${lpoFileId}) linked to Order ${orderId}`);
-        } else {
-            console.log("⚠️ No LPO file found for this order.");
-        }
-
-        res.status(200).send("Webhook received successfully.");
-    } catch (error) {
-        console.error("❌ Error processing webhook:", error);
-        res.status(500).send("Internal Server Error");
-    }
-});
-
-
-// ✅ Start the Server
+/** 🔹 Start the Server */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
