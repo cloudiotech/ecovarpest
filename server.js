@@ -107,26 +107,18 @@ async function saveMetafield(orderId, fileUrl) {
 
 // ✅ Upload Route
 app.post('/upload', upload.single('file'), async (req, res) => {
+app.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, error: 'No file uploaded.' });
     }
-    if (!req.body.orderId) {
-        return res.status(400).json({ success: false, error: 'Order ID is required.' });
-    }
-
     try {
-        // Upload file to Shopify Files API
         const fileUrl = await uploadToShopify(req.file.path);
-
-        // Save file URL to order metafield
-        await saveMetafield(req.body.orderId, fileUrl);
-
         res.json({ success: true, fileUrl });
     } catch (error) {
-        console.error("Error:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 
 // ✅ Start the Server
 app.listen(3000, () => {
