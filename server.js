@@ -47,7 +47,7 @@ async function uploadToShopify(filePath) {
         }]
     };
 
-    const response = await fetch(`https://${SHOPIFY_STORE}/admin/api/2024-01/graphql.json`, {
+    const response = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/graphql.json`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
