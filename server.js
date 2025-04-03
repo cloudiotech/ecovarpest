@@ -47,23 +47,29 @@ async function uploadToShopify(filePath) {
         }]
     };
 
-    const response = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-04/graphql.json`, {
+    const response = await fetch(`https://${process.env.SHOPIFY_STORE}/admin/api/2023-04/graphql.json`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN
+            'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN
         },
         body: JSON.stringify({ query, variables })
     });
 
     const jsonResponse = await response.json();
-    
+    console.log("Shopify API Response:", JSON.stringify(jsonResponse, null, 2)); // Debugging Log
+
+    if (!jsonResponse.data || !jsonResponse.data.fileCreate) {
+        throw new Error(`Unexpected API Response: ${JSON.stringify(jsonResponse)}`);
+    }
+
     if (jsonResponse.data.fileCreate.userErrors.length > 0) {
         throw new Error(jsonResponse.data.fileCreate.userErrors[0].message);
     }
 
     return jsonResponse.data.fileCreate.files[0].url;
 }
+
 
 // ✅ Function to Save Metafield in Order
 async function saveMetafield(orderId, fileUrl) {
