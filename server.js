@@ -32,7 +32,7 @@ async function uploadToShopify(filePath) {
       fileCreate(files: $files) {
         files {
           id
-          previewUrl  # ✅ Use previewUrl instead of url
+          url  # ✅ Use 'url' instead of 'previewUrl'
           alt
         }
         userErrors {
@@ -69,7 +69,7 @@ async function uploadToShopify(filePath) {
         throw new Error(jsonResponse.data.fileCreate.userErrors[0].message);
     }
 
-    return jsonResponse.data.fileCreate.files[0].previewUrl; // ✅ Return previewUrl instead of url
+    return jsonResponse.data.fileCreate.files[0].url; // ✅ Return 'url' instead of 'previewUrl'
 }
 
 // ✅ Save Metafield in Order
