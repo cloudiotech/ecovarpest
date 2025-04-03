@@ -166,6 +166,57 @@ app.get('/test', (req, res) => {
     res.json({ success: true, message: 'Server is working!' });
 });
 
+
+const crypto = require('crypto'); // Required for HMAC verification
+
+// ✅ Middleware to verify Shopify Webhook
+function verifyShopifyWebhook(req, res, next) {
+    const hmac = req.headers['x-shopify-hmac-sha256']; // Get HMAC from Shopify headers
+    const body = JSON.stringify(req.body);
+    const hash = crypto.createHmac('sha256', process.env.SHOPIFY_WEBHOOK_SECRET)
+                      .update(body, 'utf8')
+                      .digest('base64');
+
+    if (hash !== hmac) {
+        console.error("🚨 Webhook verification failed!");
+        return res.status(401).send("Unauthorized");
+    }
+    next();
+}
+
+// ✅ Webhook Route for Order Creation
+app.post('/webhook/orders/create', express.json({ type: 'application/json' }), verifyShopifyWebhook, async (req, res) => {
+    try {
+        const orderData = req.body;
+        const orderId = orderData.id; // Shopify Order ID
+        console.log("✅ New Order Received:", orderId);
+
+        // Extract LPO File Metafield from Customer Data (if available)
+        let lpoFileId = null;
+        if (orderData.customer && orderData.customer.metafields) {
+            const metafield = orderData.customer.metafields.find(mf => mf.namespace === "custom" && mf.key === "lpo_file");
+            if (metafield) {
+                lpoFileId = metafield.value;
+                console.log("📂 LPO File ID:", lpoFileId);
+            }
+        }
+
+        // ✅ Save LPO File ID to Order Metafields
+        if (lpoFileId) {
+            await saveMetafield(orderId, lpoFileId);
+            console.log(`✅ LPO File (${lpoFileId}) linked to Order ${orderId}`);
+        } else {
+            console.log("⚠️ No LPO file found for this order.");
+        }
+
+        res.status(200).send("Webhook received successfully.");
+    } catch (error) {
+        console.error("❌ Error processing webhook:", error);
+        res.status(500).send("Internal Server Error");
+    }
+});
+
+
 // ✅ Start the Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
