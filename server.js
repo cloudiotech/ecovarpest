@@ -1,17 +1,17 @@
-const cors = require('cors');
-app.use(cors());
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
+const cors = require('cors');
 const fetch = require('node-fetch');
 require('dotenv').config();
 
 const app = express();
 app.use(express.json()); // Ensure JSON body parsing
+app.use(cors()); // Enable CORS
 
-// ✅ Configure Multer to store files with correct names in 'uploads' directory
+// ✅ Configure Multer to store files in 'uploads' directory
 const storage = multer.diskStorage({
-    destination: 'uploads/',
+    destination: 'uploads/', 
     filename: (req, file, cb) => {
         cb(null, file.originalname); // Keep original file name
     }
@@ -57,6 +57,7 @@ async function uploadToShopify(filePath) {
     });
 
     const jsonResponse = await response.json();
+    
     if (jsonResponse.data.fileCreate.userErrors.length > 0) {
         throw new Error(jsonResponse.data.fileCreate.userErrors[0].message);
     }
@@ -100,13 +101,13 @@ async function saveMetafield(orderId, fileUrl) {
     });
 
     const jsonResponse = await response.json();
+    
     if (jsonResponse.data.metafieldsSet.userErrors.length > 0) {
         throw new Error(jsonResponse.data.metafieldsSet.userErrors[0].message);
     }
 }
 
-// ✅ Upload Route
-app.post('/upload', upload.single('file'), async (req, res) => {
+// ✅ Upload Route - FIXED
 app.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, error: 'No file uploaded.' });
@@ -119,12 +120,13 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     }
 });
 
+// ✅ Test Route - To Check Server Status
 app.get('/test', (req, res) => {
     res.json({ success: true, message: 'Server is working!' });
 });
+
 // ✅ Start the Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
-
