@@ -5,18 +5,17 @@ const fs = require('fs');
 const cors = require('cors');
 require('@shopify/shopify-api/adapters/node');
 
-const { shopifyApi, LATEST_API_VERSION } = require('@shopify/shopify-api');
+const { shopifyApi, LATEST_API_VERSION, GraphqlClient } = require('@shopify/shopify-api');
 
 const app = express();
 const port = process.env.PORT || 10000;
 
-// CORS (optional, for frontend testing)
 app.use(cors());
 
-// Multer setup (uploading to local 'uploads' folder)
+// Multer setup
 const upload = multer({ dest: 'uploads/' });
 
-// Shopify App Auth Setup
+// Shopify API setup
 const shopify = shopifyApi({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET,
@@ -26,7 +25,7 @@ const shopify = shopifyApi({
   isEmbeddedApp: false,
 });
 
-// Upload LPO Route
+// Upload endpoint
 app.post('/upload-lpo', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -37,8 +36,8 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
 
     const base64 = fs.readFileSync(req.file.path, { encoding: 'base64' });
 
-    // ✅ Use direct accessToken instead of session (for custom app)
-    const client = new shopify.clients.Graphql({
+    // ✅ Create GraphQL client explicitly with accessToken
+    const client = new GraphqlClient({
       domain: process.env.SHOPIFY_SHOP,
       accessToken: process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN,
     });
@@ -75,10 +74,9 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
     });
 
     const fileUrl = uploadResult.body.data.fileCreate.files[0].url;
-
     console.log('✅ File uploaded to Shopify:', fileUrl);
 
-    // Optional: Store to customer metafield
+    // Optional: store file URL as metafield on customer
     await client.query({
       data: {
         query: `
@@ -117,7 +115,6 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
   }
 });
 
-// Start server
 app.listen(port, () => {
   console.log(`🚀 Server listening on port ${port}`);
 });
