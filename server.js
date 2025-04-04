@@ -1,7 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
+require('@shopify/shopify-api/adapters/node'); // 👈 Required for Shopify SDK to work in Node
 const { shopifyApi, LATEST_API_VERSION } = require('@shopify/shopify-api');
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -21,7 +23,6 @@ const shopify = shopifyApi({
 app.post('/upload-lpo', upload.single('file'), async (req, res) => {
   try {
     const session = await shopify.session.customAppSession(process.env.SHOPIFY_SHOP);
-
     const client = new shopify.clients.Graphql({ session });
 
     const fs = require('fs');
@@ -86,7 +87,7 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
             {
               namespace: "custom",
               key: "lpo_upload",
-              ownerId: `gid://shopify/Customer/${process.env.DEMO_CUSTOMER_ID}`, // or cart line or checkout
+              ownerId: `gid://shopify/Customer/${process.env.DEMO_CUSTOMER_ID}`,
               type: "url",
               value: fileUrl,
             },
