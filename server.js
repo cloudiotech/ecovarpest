@@ -36,8 +36,12 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
     console.log('📁 File received:', req.file.originalname);
 
     const base64 = fs.readFileSync(req.file.path, { encoding: 'base64' });
-    const session = await shopify.session.customAppSession(process.env.SHOPIFY_SHOP);
-    const client = new shopify.clients.Graphql({ session });
+
+    // ✅ Use direct accessToken instead of session (for custom app)
+    const client = new shopify.clients.Graphql({
+      domain: process.env.SHOPIFY_SHOP,
+      accessToken: process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN,
+    });
 
     const uploadResult = await client.query({
       data: {
