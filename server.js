@@ -38,15 +38,22 @@ async function uploadToShopify(filePath) {
         body: formData
     });
 
+    // Check if the response status is OK
+    if (!response.ok) {
+        throw new Error(`Failed to upload file: ${response.statusText}`);
+    }
+
     const jsonResponse = await response.json();
-    if (jsonResponse.errors) {
-        throw new Error(jsonResponse.errors);
+
+    // Check if the response contains valid JSON
+    if (!jsonResponse || jsonResponse.errors) {
+        throw new Error(`Upload failed: ${jsonResponse ? JSON.stringify(jsonResponse.errors) : 'Unknown error'}`);
     }
 
     console.log("🔹 Shopify File Upload Response:", JSON.stringify(jsonResponse, null, 2));
-
     return jsonResponse.file.src; // URL of the uploaded file
 }
+
 
 /** 🔹 Save Metafield in Shopify (Order / Customer) */
 async function saveMetafield(ownerType, ownerId, fileUrl) {
