@@ -5,7 +5,7 @@ const fs = require('fs');
 const cors = require('cors');
 require('@shopify/shopify-api/adapters/node');
 
-const { shopifyApi, LATEST_API_VERSION, GraphqlClient } = require('@shopify/shopify-api');
+const { shopifyApi, LATEST_API_VERSION } = require('@shopify/shopify-api');
 
 const app = express();
 const port = process.env.PORT || 10000;
@@ -36,11 +36,14 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
 
     const base64 = fs.readFileSync(req.file.path, { encoding: 'base64' });
 
-    // ✅ Create GraphQL client explicitly with accessToken
-    const client = new GraphqlClient({
-      domain: process.env.SHOPIFY_SHOP,
+    // ✅ Create a session manually using access token
+    const session = {
+      shop: process.env.SHOPIFY_SHOP,
       accessToken: process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN,
-    });
+    };
+
+    // ✅ Use shopify.clients.Graphql with the session
+    const client = new shopify.clients.Graphql({ session });
 
     const uploadResult = await client.query({
       data: {
