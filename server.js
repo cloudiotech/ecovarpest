@@ -36,25 +36,38 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
 
     const base64 = fs.readFileSync(req.file.path, { encoding: 'base64' });
 
-    // ✅ Create a session manually using access token
+    // Create session manually
     const session = {
       shop: process.env.SHOPIFY_SHOP,
       accessToken: process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN,
     };
 
-    // ✅ Use shopify.clients.Graphql with the session
     const client = new shopify.clients.Graphql({ session });
 
+    // Upload file to Shopify
     const uploadResult = await client.query({
       data: {
         query: `
           mutation fileCreate($files: [FileCreateInput!]!) {
             fileCreate(files: $files) {
               files {
-                url
-                alt
-                createdAt
-                fileStatus
+                __typename
+                ... on GenericFile {
+                  id
+                  url
+                  alt
+                  fileStatus
+                  createdAt
+                }
+                ... on MediaImage {
+                  id
+                  alt
+                  fileStatus
+                  createdAt
+                  image {
+                    url
+                  }
+                }
               }
               userErrors {
                 field
@@ -76,10 +89,22 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
       },
     });
 
-    const fileUrl = uploadResult.body.data.fileCreate.files[0].url;
+    const uploadedFile = uploadResult.body.data.fileCreate.files[0];
+
+    let fileUrl = '';
+    if (uploadedFile.__typename === 'GenericFile') {
+      fileUrl = uploadedFile.url;
+    } else if (uploadedFile.__typename === 'MediaImage') {
+      fileUrl = uploadedFile.image?.url || '';
+    }
+
     console.log('✅ File uploaded to Shopify:', fileUrl);
 
-    // Optional: store file URL as metafield on customer
+    if (!fileUrl) {
+      throw new Error('File URL not found in response');
+    }
+
+    // Save file URL as metafield on customer
     await client.query({
       data: {
         query: `
@@ -110,6 +135,9 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
         },
       },
     });
+
+    // Clean up uploaded file from local disk
+    fs.unlinkSync(req.file.path);
 
     return res.json({ success: true, fileUrl });
   } catch (error) {
