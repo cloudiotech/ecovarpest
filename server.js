@@ -19,7 +19,7 @@ const upload = multer({ dest: 'uploads/' });
 // Shopify App Auth Setup
 const shopify = shopifyApi({
   apiKey: process.env.SHOPIFY_API_KEY,
-  apiSecretKey: process.env.SHOPIFY_SECRET,
+  apiSecretKey: process.env.SHOPIFY_API_SECRET,
   scopes: ['write_files', 'write_customers', 'write_metafields'],
   hostName: process.env.SHOPIFY_APP_URL.replace(/^https?:\/\//, ''),
   apiVersion: LATEST_API_VERSION,
