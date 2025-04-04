@@ -3,6 +3,7 @@ const multer = require('multer');
 const fs = require('fs');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const FormData = require('form-data');
 const crypto = require('crypto');
 require('dotenv').config();
 
@@ -23,52 +24,28 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-/** 🔹 Upload File to Shopify Files API */
+/** 🔹 Upload File to Shopify Files API (using REST API) */
 async function uploadToShopify(filePath) {
     const fileBuffer = fs.readFileSync(filePath);
-    const fileBase64 = fileBuffer.toString('base64');
+    const formData = new FormData();
+    formData.append('file', fileBuffer, { filename: 'LPO.pdf' });
 
-    const query = `
-    mutation fileCreate($files: [FileCreateInput!]!) {
-      fileCreate(files: $files) {
-        files {
-          id
-          preview {
-            image { originalSrc }
-          }
-        }
-        userErrors {
-          field
-          message
-        }
-      }
-    }`;
-
-    const variables = {
-        files: [{
-            originalSource: `data:application/pdf;base64,${fileBase64}`,
-            alt: 'LPO File'
-        }]
-    };
-
-    const response = await fetch(`https://${SHOPIFY_STORE}/admin/api/2024-01/graphql.json`, {
+    const response = await fetch(`https://${SHOPIFY_STORE}/admin/api/2024-01/files.json`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
             'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN
         },
-        body: JSON.stringify({ query, variables })
+        body: formData
     });
 
     const jsonResponse = await response.json();
-    console.log("🔹 Shopify API Response:", JSON.stringify(jsonResponse, null, 2));
-
-    if (jsonResponse.data.fileCreate.userErrors.length > 0) {
-        throw new Error(jsonResponse.data.fileCreate.userErrors[0].message);
+    if (jsonResponse.errors) {
+        throw new Error(jsonResponse.errors);
     }
 
-    return jsonResponse.data.fileCreate.files[0].preview.image.originalSrc;
+    console.log("🔹 Shopify File Upload Response:", JSON.stringify(jsonResponse, null, 2));
+
+    return jsonResponse.file.src; // URL of the uploaded file
 }
 
 /** 🔹 Save Metafield in Shopify (Order / Customer) */
