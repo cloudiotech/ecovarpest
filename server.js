@@ -80,7 +80,7 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
           files: [
             {
               alt: 'LPO Upload',
-              contentType: 'GENERIC_FILE',
+              contentType: 'FILE',
               originalSource: `data:application/octet-stream;base64,${base64}`,
               filename: req.file.originalname,
             },
