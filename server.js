@@ -45,50 +45,94 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
     const client = new shopify.clients.Graphql({ session });
 
     // Upload file to Shopify
-    const uploadResult = await client.query({
-      data: {
-        query: `
-          mutation fileCreate($files: [FileCreateInput!]!) {
-            fileCreate(files: $files) {
-              files {
-                __typename
-                ... on GenericFile {
-                  id
-                  url
-                  alt
-                  fileStatus
-                  createdAt
-                }
-                ... on MediaImage {
-                  id
-                  alt
-                  fileStatus
-                  createdAt
-                  image {
-                    url
-                  }
-                }
-              }
-              userErrors {
-                field
-                message
+    // const uploadResult = await client.query({
+    //   data: {
+    //     query: `
+    //       mutation fileCreate($files: [FileCreateInput!]!) {
+    //         fileCreate(files: $files) {
+    //           files {
+    //             __typename
+    //             ... on GenericFile {
+    //               id
+    //               url
+    //               alt
+    //               fileStatus
+    //               createdAt
+    //             }
+    //             ... on MediaImage {
+    //               id
+    //               alt
+    //               fileStatus
+    //               createdAt
+    //               image {
+    //                 url
+    //               }
+    //             }
+    //           }
+    //           userErrors {
+    //             field
+    //             message
+    //           }
+    //         }
+    //       }
+    //     `,
+    //     variables: {
+    //       files: [
+    //         {
+    //           alt: 'LPO Upload',
+    //           contentType: 'FILE',
+    //           // originalSource: `data:application/octet-stream;base64,${base64}`,
+    //           originalSource: `data:application/pdf;base64,${base64}`,
+    //           filename: req.file.originalname,
+    //         },
+    //       ],
+    //     },
+    //   },
+    // });
+
+const uploadResult = await client.query({
+  data: {
+    query: `
+      mutation fileCreate($files: [FileCreateInput!]!) {
+        fileCreate(files: $files) {
+          files {
+            __typename
+            ... on GenericFile {
+              id
+              url
+              alt
+              fileStatus
+              createdAt
+            }
+            ... on MediaImage {
+              id
+              alt
+              fileStatus
+              createdAt
+              image {
+                url
               }
             }
           }
-        `,
-        variables: {
-          files: [
-            {
-              alt: 'LPO Upload',
-              contentType: 'FILE',
-              // originalSource: `data:application/octet-stream;base64,${base64}`,
-              originalSource: `data:application/pdf;base64,${base64}`,
-              filename: req.file.originalname,
-            },
-          ],
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `,
+    variables: {
+      files: [
+        {
+          alt: 'LPO Upload',
+          contentType: 'FILE', // ✅ this is valid
+          originalSource: `data:application/octet-stream;base64,${base64}`,
+          filename: req.file.originalname,
         },
-      },
-    });
+      ],
+    },
+  },
+});
 
     const uploadedFile = uploadResult.body.data.fileCreate.files[0];
 
