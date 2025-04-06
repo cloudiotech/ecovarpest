@@ -81,7 +81,8 @@ app.post('/upload-lpo', upload.single('file'), async (req, res) => {
             {
               alt: 'LPO Upload',
               contentType: 'FILE',
-              originalSource: `data:application/octet-stream;base64,${base64}`,
+              // originalSource: `data:application/octet-stream;base64,${base64}`,
+              originalSource: `data:application/pdf;base64,${base64}`,
               filename: req.file.originalname,
             },
           ],
